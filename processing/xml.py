@@ -63,7 +63,7 @@ class FormXMLParser:
         created_at: createdAt attribute
         submitted_at: submittedAt attribute
         logsheet_version: logsheetVersion attribute
-        fields: nested dict built recursively from the <fields> subtree
+        fields: list of field dicts from the <fields> subtree (each <field> → one dict)
     """
 
     def __init__(self, attr_prefix: str = "@", text_key: str = "#text"):
@@ -75,7 +75,7 @@ class FormXMLParser:
         self.created_at: str | None = None
         self.submitted_at: str | None = None
         self.logsheet_version: str | None = None
-        self.fields: dict[str, Any] = {}
+        self.fields: list[dict[str, Any]] = []
 
     def parse_file(self, path: str | Path) -> "FormXMLParser":
         """
@@ -109,9 +109,17 @@ class FormXMLParser:
 
         fields_el = form_el.find("fields")
         if fields_el is not None:
-            self.fields = self._element_to_dict(fields_el)
+            raw = self._element_to_dict(fields_el)
+            # Unwrap: raw is {"field": [...]} or {"field": {...}}; store the list directly.
+            field = raw.get("field")
+            if field is None:
+                self.fields = []
+            elif isinstance(field, list):
+                self.fields = field
+            else:
+                self.fields = [field]
         else:
-            self.fields = {}
+            self.fields = []
 
     def __str__(self) -> str:
         lines = [

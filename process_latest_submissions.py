@@ -36,6 +36,7 @@ def main():
             if filename != "site_metadata.xml":
                 xml = FormXMLParser()
                 xml.parse_string(content)
+                config = configs[xml.form_id][xml.logsheet_version]
 
     # download files, delete them after processing
     # and push them to google sheets
