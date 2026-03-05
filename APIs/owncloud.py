@@ -250,9 +250,11 @@ class OwnCloudAPI:
         raw = self._propfind_with_props(remote_path, depth="1")
         tree = ElementTree.fromstring(raw)
         ns = {"d": "DAV:"}
-        base_path = urlparse(f"{self.owncloud_url}/{remote_path}".rstrip("/")).path.rstrip("/")
-        base_url = f"{self.owncloud_url}/{remote_path}".rstrip("/")
+        base_path = urlparse(f"{self.owncloud_url}{remote_path}".rstrip("/")).path.rstrip("/")
+        base_url = f"{self.owncloud_url}{remote_path}".rstrip("/")
         files_to_download = []
+
+        print(base_path)
 
         for resp in tree.findall("d:response", ns):
             href_el = resp.find("d:href", ns)
@@ -283,6 +285,7 @@ class OwnCloudAPI:
 
         result = []
         for filename in files_to_download:
+            print(filename)
             file_url = f"{base_url}/{filename}"
             r = requests.get(file_url, headers=self._auth_headers())
             if r.status_code in (200, 201, 204):

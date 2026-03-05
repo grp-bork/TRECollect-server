@@ -2,6 +2,7 @@
 XML parsers for TRECollect: form XMLs and site_metadata.xml.
 """
 
+import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -19,24 +20,20 @@ class SiteXMLParser:
 
     def parse_file(self, path: str | Path) -> "SiteXMLParser":
         """
-        Parse a site_metadata.xml file and populate this instance's attributes.
+        Parse a site_metadata.xml file from disk and populate this instance's attributes.
 
-        Args:
-            path: Path to the XML file (string or Path).
-
-        Returns:
-            self (for chaining).
-
-        Raises:
-            FileNotFoundError: If the file does not exist.
-            ET.ParseError: If the XML is malformed.
-            ValueError: If root element is not "siteMetadata".
+        This is a convenience wrapper around parse_string that reads the file content
+        and then parses it as XML.
         """
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"XML file not found: {path}")
-        tree = ET.parse(path)
-        root = tree.getroot()
+        xml_string = path.read_text(encoding="utf-8")
+        return self.parse_string(xml_string)
+
+    def parse_string(self, xml_string: str) -> "SiteXMLParser":
+        """Parse a site_metadata XML document provided as a string."""
+        root = ET.fromstring(xml_string)
         if root.tag != "siteMetadata":
             raise ValueError(f"Expected root element 'siteMetadata', got '{root.tag}'")
         self._populate(root)
@@ -48,6 +45,12 @@ class SiteXMLParser:
         submitted_el = root.find("submittedAt")
         self.site_name = site_name_el.text.strip() if site_name_el is not None and site_name_el.text else None
         self.submitted_at = submitted_el.text.strip() if submitted_el is not None and submitted_el.text else None
+
+    def __str__(self) -> str:
+        lines = ["SiteMetadata:"]
+        lines.append(f"  site_name: {self.site_name!r}")
+        lines.append(f"  submitted_at: {self.submitted_at!r}")
+        return "\n".join(lines)
 
 
 class FormXMLParser:
@@ -76,24 +79,20 @@ class FormXMLParser:
 
     def parse_file(self, path: str | Path) -> "FormXMLParser":
         """
-        Parse an XML file and populate this instance's attributes.
+        Parse a form XML file from disk and populate this instance's attributes.
 
-        Args:
-            path: Path to the form XML file (string or Path).
-
-        Returns:
-            self (for chaining).
-
-        Raises:
-            FileNotFoundError: If the file does not exist.
-            ET.ParseError: If the XML is malformed.
-            ValueError: If root element is not "form".
+        This is a convenience wrapper around parse_string that reads the file content
+        and then parses it as XML.
         """
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"XML file not found: {path}")
-        tree = ET.parse(path)
-        root = tree.getroot()
+        xml_string = path.read_text(encoding="utf-8")
+        return self.parse_string(xml_string)
+
+    def parse_string(self, xml_string: str) -> "FormXMLParser":
+        """Parse a form XML document provided as a string."""
+        root = ET.fromstring(xml_string)
         if root.tag != "form":
             raise ValueError(f"Expected root element 'form', got '{root.tag}'")
         self._populate_from_form(root)
@@ -114,12 +113,32 @@ class FormXMLParser:
         else:
             self.fields = {}
 
+    def __str__(self) -> str:
+        lines = [
+            "Form:",
+            f"  form_id: {self.form_id!r}",
+            f"  site_id: {self.site_id!r}",
+            f"  created_at: {self.created_at!r}",
+            f"  submitted_at: {self.submitted_at!r}",
+            f"  logsheet_version: {self.logsheet_version!r}",
+            "  fields:",
+        ]
+        try:
+            fields_str = json.dumps(self.fields, indent=4, default=str)
+        except (TypeError, ValueError):
+            fields_str = repr(self.fields)
+        for line in fields_str.splitlines():
+            lines.append(f"    {line}")
+        return "\n".join(lines)
+
     def _element_to_dict(self, element: ET.Element) -> dict[str, Any]:
-        """Convert an Element to a nested dictionary (attributes, text, children)."""
+        """Convert an Element to a nested dictionary (attributes, text, children).
+        Attribute names are stored without a prefix (e.g. id, value, not @id, @value).
+        """
         result: dict[str, Any] = {}
 
         for key, value in element.attrib.items():
-            result[f"{self.attr_prefix}{key}"] = value
+            result[key] = value
 
         if element.text and element.text.strip():
             result[self.text_key] = element.text.strip()
@@ -136,6 +155,6 @@ class FormXMLParser:
                 result[tag] = dicts
 
         if element.tail and element.tail.strip():
-            result[f"{self.attr_prefix}tail"] = element.tail.strip()
+            result["tail"] = element.tail.strip()
 
         return result
