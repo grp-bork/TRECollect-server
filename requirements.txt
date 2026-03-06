@@ -1,0 +1,8 @@
+requests
+dotenv
+gspread
+oauth2client
+pandas
+openpyxl
+google-api-python-client
+PyPDF2
