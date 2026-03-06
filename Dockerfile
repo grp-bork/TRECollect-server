@@ -13,8 +13,8 @@ RUN mkdir /app/logs
 COPY . /app
 
 # Create virtual environment and install dependencies
-RUN python -m venv TRECollect-logsheets && \
-    . TRECollect-logsheets/bin/activate && \
+RUN python -m venv TRECollect-server && \
+    . TRECollect-server/bin/activate && \
     pip install --upgrade pip && \
     if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 

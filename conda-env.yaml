@@ -1,4 +1,4 @@
-name: TRECollect-logsheets
+name: TRECollect-server
 channels:
   - defaults
 dependencies:
