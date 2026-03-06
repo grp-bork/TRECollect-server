@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import gspread
+from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 
 from APIs.utils import rate_limited_with_retry, clean_up_nulls, create_keyfile_dict
@@ -13,18 +14,26 @@ class GoogleAPI:
         self.client = gspread.authorize(creds)
 
     @rate_limited_with_retry()
-    def access_sheet(self, file_key, worksheet):
-        """Access remote Google worksheet
+    def access_sheet(self, file_key, worksheet, create_if_missing=True, rows=1000, cols=50):
+        """Access remote Google worksheet, creating it if it does not exist.
 
         Args:
             file_key (str): identifier of Google sheet
-            worksheet (str): identifier of sheet tab
+            worksheet (str): identifier of sheet tab (title)
+            create_if_missing (bool): if True, create a new worksheet with the given title when not found (default True)
+            rows (int): number of rows when creating a new worksheet (default 1000)
+            cols (int): number of columns when creating a new worksheet (default 26)
 
         Returns:
             sheet: Google sheet
         """
         spreadsheet = self.client.open_by_key(file_key)
-        return spreadsheet.worksheet(worksheet)
+        try:
+            return spreadsheet.worksheet(worksheet)
+        except WorksheetNotFound:
+            if create_if_missing:
+                return spreadsheet.add_worksheet(title=worksheet, rows=rows, cols=cols)
+            raise
 
     @rate_limited_with_retry()
     def read_table(self, file_key, worksheet):
