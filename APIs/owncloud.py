@@ -232,7 +232,7 @@ class OwnCloudAPI:
                     f.write(r.text)
                 downloaded.append(local_path)
 
-        return downloaded
+        return len(downloaded) != 0
 
     def get_remote_files(self, remote_path):
         """Download all XML files from a remote directory (flat list, no subfolders).
