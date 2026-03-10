@@ -108,11 +108,16 @@ def _extract_table_flat(
         for row_name in row_names:
             row_cells = data.get(row_name)
             if not isinstance(row_cells, dict):
-                continue
-            for col_name in column_names:
-                if col_name in row_cells:
+                for col_name in column_names:
                     key = f"{label} - {row_name} - {col_name}"
-                    out[key] = row_cells[col_name]
+                    out[key] = None
+            else:
+                for col_name in column_names:
+                    key = f"{label} - {row_name} - {col_name}"
+                    if col_name in row_cells:
+                        out[key] = row_cells[col_name]
+                    else:
+                        out[key] = None
     return out
 
 
@@ -139,6 +144,8 @@ def process_site(form_parser: FormXMLParser, config: dict[str, Any]) -> dict[str
             if field_data is not None:
                 value = _extract_simple_value(field_data, field_type)
                 out[label] = value
+            else:
+                out[label] = None
         else:
             field_data = _find_field_by_id(fields_list, field_id)
             if field_data is not None:
