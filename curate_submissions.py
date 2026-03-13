@@ -85,8 +85,10 @@ def curate_rows_per_sheet(
     and returns a new mapping with curated DataFrames.
     """
     curated: Dict[str, pd.DataFrame] = {}
+    print(">>> Curating sheets")
 
     for sheet_name, df in raw_rows.items():
+        print(f">>>'{sheet_name}' with {len(df)} rows.")
         # For now we only curate LSI sheets; others are ignored.
         if not sheet_name.startswith("LSI"):
             continue
@@ -134,7 +136,10 @@ def write_curated_rows(
     if not target_sheet_id:
         return
 
+    print(f">>> Writing sheets")
+
     for sheet_name, df in rows_to_write.items():
+        print(f">>>'{sheet_name}' with {len(df)} rows.")
         if df.empty:
             continue
         if sheet_name in overwrite_sheets:
@@ -167,21 +172,19 @@ def main(args: argparse.Namespace) -> None:
     last_timestamp = get_last_curation_timestamp()
 
     raw_rows = fetch_new_rows(google_api, source_sheet_id, last_timestamp)
-    curated = curate_rows_per_sheet(raw_rows, owncloud_images_token)
+    if raw_rows:
+        curated = curate_rows_per_sheet(raw_rows, owncloud_images_token)
 
-    rules = get_output_rules()
-    sheets_to_load = sheets_to_load_for_rules(rules)
-    existing_sheets = load_existing_sheets(google_api, lsi_target_sheet_id, sheets_to_load)
+        rules = get_output_rules()
+        sheets_to_load = sheets_to_load_for_rules(rules)
+        existing_sheets = load_existing_sheets(google_api, lsi_target_sheet_id, sheets_to_load)
 
-    rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
+        rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
 
-    for sheet_name, df in rows_to_write.items():
-        print(f"Sheet: {sheet_name}")
-        print(df)
-
-    write_curated_rows(google_api, lsi_target_sheet_id, rows_to_write, overwrite_sheets)
-    save_last_curation_timestamp(now)
-
+        write_curated_rows(google_api, lsi_target_sheet_id, rows_to_write, overwrite_sheets)
+        save_last_curation_timestamp(now)
+    else:
+        print(">>> No new rows to curate.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Curate submissions from Google Sheets.")

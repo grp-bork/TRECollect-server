@@ -13,6 +13,15 @@ class GoogleAPI:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(create_keyfile_dict(), scope)
         self.client = gspread.authorize(creds)
 
+    @staticmethod
+    def _sheet_value(val):
+        """Convert a cell value to something JSON-serializable for the Sheets API."""
+        if pd.isna(val):
+            return ""
+        if hasattr(val, "item"):  # numpy scalar
+            return val.item()
+        return val
+
     @rate_limited_with_retry()
     def access_sheet(self, file_key, worksheet, create_if_missing=True, rows=1000, cols=50):
         """Access remote Google worksheet, creating it if it does not exist.
@@ -63,7 +72,10 @@ class GoogleAPI:
         """
         spreadsheet = self.client.open_by_key(file_key)
         sheet = spreadsheet.worksheet(worksheet)
-        sheet.update([df.columns.values.tolist()] + df.values.tolist())
+        # Ensure all cells are JSON-serializable (pd.NA / np.nan are not)
+        header = [self._sheet_value(v) for v in df.columns]
+        rows = [[self._sheet_value(v) for v in row] for row in df.values.tolist()]
+        sheet.update([header] + rows)
 
     @rate_limited_with_retry()
     def add_rows(self, file_key, worksheet, row_dicts):
