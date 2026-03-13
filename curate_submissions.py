@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
-from typing import Dict, List
+from typing import Dict, Set
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -12,6 +12,11 @@ from zoneinfo import ZoneInfo
 from APIs.google_spreadsheets import GoogleAPI
 from processing.utils import get_last_curation_timestamp, save_last_curation_timestamp
 from curation.annotation import curate_value
+from curation.output_rules import (
+    apply_output_rules,
+    get_output_rules,
+    sheets_to_load_for_rules,
+)
 
 
 def fetch_new_rows(google_api: GoogleAPI, source_sheet_id: str, last_timestamp: dt.datetime) -> Dict[str, pd.DataFrame]:
@@ -96,18 +101,47 @@ def curate_rows_per_sheet(
     return curated
 
 
+def load_existing_sheets(
+    google_api: GoogleAPI,
+    target_sheet_id: str,
+    sheet_names: Set[str],
+) -> Dict[str, pd.DataFrame]:
+    """Load current content of the given sheets from the target spreadsheet."""
+    result: Dict[str, pd.DataFrame] = {}
+    if not target_sheet_id:
+        return result
+    existing_tabs = google_api.get_all_worksheets(target_sheet_id)
+    for name in sheet_names:
+        if name in existing_tabs:
+            result[name] = google_api.read_table(target_sheet_id, name)
+        else:
+            result[name] = pd.DataFrame()
+    return result
+
+
 def write_curated_rows(
     google_api: GoogleAPI,
     target_sheet_id: str,
-    curated_rows: Dict[str, pd.DataFrame],
+    rows_to_write: Dict[str, pd.DataFrame],
+    overwrite_sheets: Set[str],
 ) -> None:
     """
-    Store curated rows into the target spreadsheet.
+    Write prepared data to the target spreadsheet.
 
-    Depending on the final design, this may append to existing tabs,
-    overwrite them, or write into dedicated curated tabs.
+    - Sheets in overwrite_sheets: full overwrite of the tab.
+    - All other sheets: append rows to the tab (create if missing).
     """
-    raise NotImplementedError
+    if not target_sheet_id:
+        return
+
+    for sheet_name, df in rows_to_write.items():
+        if df.empty:
+            continue
+        if sheet_name in overwrite_sheets:
+            google_api.overwrite_table(target_sheet_id, sheet_name, df)
+        else:
+            row_dicts = df.to_dict(orient="records")
+            google_api.add_rows(target_sheet_id, sheet_name, row_dicts)
 
 
 def main(args: argparse.Namespace) -> None:
@@ -129,16 +163,23 @@ def main(args: argparse.Namespace) -> None:
     google_api = GoogleAPI()
 
     now = dt.datetime.now(ZoneInfo("Europe/Paris"))
+    print(f'>>> {now}')
     last_timestamp = get_last_curation_timestamp()
 
     raw_rows = fetch_new_rows(google_api, source_sheet_id, last_timestamp)
     curated = curate_rows_per_sheet(raw_rows, owncloud_images_token)
 
-    for sheet_name, df in curated.items():
+    rules = get_output_rules()
+    sheets_to_load = sheets_to_load_for_rules(rules)
+    existing_sheets = load_existing_sheets(google_api, lsi_target_sheet_id, sheets_to_load)
+
+    rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
+
+    for sheet_name, df in rows_to_write.items():
         print(f"Sheet: {sheet_name}")
         print(df)
 
-    write_curated_rows(google_api, lsi_target_sheet_id, curated)
+    write_curated_rows(google_api, lsi_target_sheet_id, rows_to_write, overwrite_sheets)
     save_last_curation_timestamp(now)
 
 
