@@ -115,7 +115,7 @@ def main(args):
                 print('>>> Running curation on production data...')
                 full_snapshot = run_curation(data, logsheet_names, google_api, lsi_target_sheet_id, owncloud_images_token)
                 if full_snapshot:
-                    compute_and_save_statistics(full_snapshot)
+                    compute_and_save_statistics(full_snapshot, configs)
         else:
             print('>>> No production data to curate.')
 
