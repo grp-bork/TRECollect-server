@@ -12,6 +12,7 @@ from processing.utils import get_last_data_timestamp, get_last_config_timestamp,
                             save_last_data_timestamp, is_debug_submission
 from processing.xml import FormXMLParser
 from processing.process import process_site
+from curate_submissions import run_curation
 
 
 def main(args):
@@ -72,12 +73,12 @@ def main(args):
                     else:
                         data[xml.form_id] = data.get(xml.form_id, []) + [output]
 
-        for data, sheet_id, backup_id in [
+        for dataset, sheet_id, backup_id in [
             (data, raw_sheet_id, raw_sheet_backup_id),
             (debug_data, raw_sheet_debug_id, None),
         ]:
             print(f'>>> Processing {"production" if backup_id else "debug"} data...')
-            for form_id, submissions in data.items():
+            for form_id, submissions in dataset.items():
                 print(f'>>> Processing form {form_id} with {len(submissions)} submissions...')
 
                 processed_df = pd.DataFrame(submissions)
@@ -104,6 +105,16 @@ def main(args):
                     google_api.add_rows(sheet_id, logsheet_names[form_id], row_dicts)
                     if backup_id:
                         google_api.add_rows(backup_id, logsheet_names[form_id], row_dicts)
+
+        # Curate production data and write to LSI target sheet (no spreadsheet mining, no curation timestamp)
+        if not args.local and data:
+            lsi_target_sheet_id = os.environ.get('LSI_SHEET_LATEST_SUBMISSIONS_ID')
+            owncloud_images_token = os.environ.get('OWNCLOUD_IMAGES_TOKEN')
+            if lsi_target_sheet_id and owncloud_images_token:
+                print('>>> Running curation on production data...')
+                run_curation(data, logsheet_names, google_api, lsi_target_sheet_id, owncloud_images_token)
+        else:
+            print('>>> No production data to curate.')
 
         # and update the last run timestamp
         print(f'>>> Updating last run timestamp...')

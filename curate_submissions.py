@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import datetime as dt
-import os
-from typing import Dict, Set
+from typing import Any, Dict, List, Set
 
 import pandas as pd
-from dotenv import load_dotenv
-from zoneinfo import ZoneInfo
 
 from APIs.google_spreadsheets import GoogleAPI
-from processing.utils import get_last_curation_timestamp, save_last_curation_timestamp
 from curation.annotation import curate_value
 from curation.output_rules import (
     apply_output_rules,
@@ -149,45 +144,30 @@ def write_curated_rows(
             google_api.add_rows(target_sheet_id, sheet_name, row_dicts)
 
 
-def main(args: argparse.Namespace) -> None:
+def run_curation(
+    production_data: Dict[str, List[Dict[str, Any]]],
+    logsheet_names: Dict[str, str],
+    google_api: GoogleAPI,
+    target_sheet_id: str,
+    owncloud_images_token: str,
+) -> None:
     """
-    Top-level orchestration for LSI curation:
+    Curate production data (in-memory) and write to the target spreadsheet.
 
-    1. Load configuration and last curation timestamp.
-    2. Read new rows (based on `Submission date`) from all tabs.
-    3. Curate the collected rows.
-    4. Store curated data in the target spreadsheet.
-    5. Update the stored timestamp.
+    production_data: form_id -> list of submission row dicts (same as in process_latest_submissions).
+    logsheet_names: form_id -> sheet name (e.g. "LSI 1", "LSI 14-1").
     """
-    load_dotenv("CONFIG.env")
+    raw_rows: Dict[str, pd.DataFrame] = {}
+    for form_id, rows in production_data.items():
+        sheet_name = logsheet_names.get(form_id)
+        if not sheet_name or not rows:
+            continue
+        raw_rows[sheet_name] = pd.DataFrame(rows)
 
-    source_sheet_id = os.environ.get("RAW_SHEET_ID")
-    lsi_target_sheet_id = os.environ.get("LSI_SHEET_LATEST_SUBMISSIONS_ID")
-    owncloud_images_token = os.environ.get('OWNCLOUD_IMAGES_TOKEN')
+    curated = curate_rows_per_sheet(raw_rows, owncloud_images_token)
+    rules = get_output_rules()
+    sheets_to_load = sheets_to_load_for_rules(rules)
+    existing_sheets = load_existing_sheets(google_api, target_sheet_id, sheets_to_load)
 
-    google_api = GoogleAPI()
-
-    now = dt.datetime.now(ZoneInfo("Europe/Paris"))
-    print(f'>>> {now}')
-    last_timestamp = get_last_curation_timestamp()
-
-    raw_rows = fetch_new_rows(google_api, source_sheet_id, last_timestamp)
-    if raw_rows:
-        curated = curate_rows_per_sheet(raw_rows, owncloud_images_token)
-
-        rules = get_output_rules()
-        sheets_to_load = sheets_to_load_for_rules(rules)
-        existing_sheets = load_existing_sheets(google_api, lsi_target_sheet_id, sheets_to_load)
-
-        rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
-
-        write_curated_rows(google_api, lsi_target_sheet_id, rows_to_write, overwrite_sheets)
-        save_last_curation_timestamp(now)
-    else:
-        print(">>> No new rows to curate.")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Curate submissions from Google Sheets.")
-    # Outline: we can later add options like --since, --dry-run, etc.
-    args = parser.parse_args()
-    main(args)
+    rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
+    write_curated_rows(google_api, target_sheet_id, rows_to_write, overwrite_sheets)
