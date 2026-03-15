@@ -12,7 +12,7 @@ from processing.utils import get_last_data_timestamp, get_last_config_timestamp,
                             save_last_data_timestamp, is_debug_submission
 from processing.xml import FormXMLParser
 from processing.process import process_site
-from curate_submissions import run_curation
+from curation.curate_submissions import run_curation
 
 
 def main(args):

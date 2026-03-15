@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Set
 import pandas as pd
 
 from APIs.google_spreadsheets import GoogleAPI
-from curation.annotation import curate_value
-from curation.output_rules import (
+
+from .annotation import curate_value
+from .output_rules import (
     apply_output_rules,
     get_output_rules,
     sheets_to_load_for_rules,
@@ -171,3 +172,7 @@ def run_curation(
 
     rows_to_write, overwrite_sheets = apply_output_rules(curated, existing_sheets, rules)
     write_curated_rows(google_api, target_sheet_id, rows_to_write, overwrite_sheets)
+
+
+if __name__ == "__main__":
+    print("Curation is run automatically from process_latest_submissions.py. Run that script instead.")
