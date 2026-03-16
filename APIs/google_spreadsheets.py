@@ -1,8 +1,10 @@
-import os
 import pandas as pd
 import gspread
 from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
+from typing import Optional, List
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
 
 from APIs.utils import rate_limited_with_retry, clean_up_nulls, create_keyfile_dict
 
@@ -12,6 +14,23 @@ class GoogleAPI:
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         creds = ServiceAccountCredentials.from_json_keyfile_dict(create_keyfile_dict(), scope)
         self.client = gspread.authorize(creds)
+
+    def get_modified_time(self, file_key):
+        scopes = ["https://www.googleapis.com/auth/drive.metadata.readonly"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(create_keyfile_dict(), scopes)
+        drive = build("drive", "v3", credentials=creds)
+
+        meta = drive.files().get(fileId=file_key, fields="modifiedTime").execute()
+        return meta['modifiedTime']
+
+    @staticmethod
+    def _sheet_value(val):
+        """Convert a cell value to something JSON-serializable for the Sheets API."""
+        if pd.isna(val):
+            return ""
+        if hasattr(val, "item"):  # numpy scalar
+            return val.item()
+        return val
 
     @rate_limited_with_retry()
     def access_sheet(self, file_key, worksheet, create_if_missing=True, rows=1000, cols=50):
@@ -63,7 +82,10 @@ class GoogleAPI:
         """
         spreadsheet = self.client.open_by_key(file_key)
         sheet = spreadsheet.worksheet(worksheet)
-        sheet.update([df.columns.values.tolist()] + df.values.tolist())
+        # Ensure all cells are JSON-serializable (pd.NA / np.nan are not)
+        header = [self._sheet_value(v) for v in df.columns]
+        rows = [[self._sheet_value(v) for v in row] for row in df.values.tolist()]
+        sheet.update([header] + rows)
 
     @rate_limited_with_retry()
     def add_rows(self, file_key, worksheet, row_dicts):
@@ -152,6 +174,23 @@ class GoogleAPI:
         except Exception as e:
             print(f"Error getting worksheets: {e}")
             return []
+
+    def read_tables(self, file_key, sheet_names: Optional[List[str]] = None):
+        """Load specified worksheets in the spreadsheet as DataFrames.
+        
+        Args:
+            file_key (str): identifier of Google sheet
+            sheet_names (list): list of worksheet names to load
+        Returns:
+            dict: worksheet name -> pandas DataFrame
+        """
+        if not file_key:
+            return {}
+        if sheet_names:
+            return {name: self.read_table(file_key, name) for name in sheet_names}
+        else:
+            sheet_names = self.get_all_worksheets(file_key)
+            return {name: self.read_table(file_key, name) for name in sheet_names}
 
     @rate_limited_with_retry()
     def clear_worksheet_data(self, file_key, worksheet):

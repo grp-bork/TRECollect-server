@@ -3,6 +3,10 @@ import json
 import os
 
 
+def is_debug_submission(location):
+    return location.startswith("dev-debug/")
+
+
 def save_file(filename, content):
     with open(filename, 'w') as f:
         f.write(content)
@@ -14,19 +18,27 @@ def read_file(filename):
 
 
 def save_last_data_timestamp(now):
-    save_file('last_data.txt', now.replace(microsecond=0).isoformat())
+    save_file('timestamps/last_data.txt', now.replace(microsecond=0).isoformat())
 
 
 def get_last_data_timestamp():
-    return datetime.datetime.fromisoformat(read_file('last_data.txt'))
+    return datetime.datetime.fromisoformat(read_file('timestamps/last_data.txt'))
 
 
 def save_last_config_timestamp(now):
-    save_file('last_config.txt', now.replace(microsecond=0).isoformat())
+    save_file('timestamps/last_config.txt', now.replace(microsecond=0).isoformat())
 
 
 def get_last_config_timestamp():
-    return datetime.datetime.fromisoformat(read_file('last_config.txt'))
+    return datetime.datetime.fromisoformat(read_file('timestamps/last_config.txt'))
+
+
+def save_last_statistics_timestamp(now):
+    save_file('timestamps/last_statistics.txt', now.replace(microsecond=0).isoformat())
+
+
+def get_last_statistics_timestamp():
+    return datetime.datetime.fromisoformat(read_file('timestamps/last_statistics.txt'))
 
 
 def load_config_versions(local_root: str) -> dict[str, dict[str, dict]]:

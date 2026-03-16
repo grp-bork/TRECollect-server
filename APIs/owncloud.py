@@ -1,7 +1,7 @@
 import base64
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Optional
 from urllib.parse import unquote, urlparse
@@ -48,7 +48,7 @@ class OwnCloudAPI:
         return response.content
 
     def _list_modified_collections(self, remote_path: str, last_check_utc) -> list[tuple[str, Optional[datetime]]]:
-        """List direct child folders whose getlastmodified is after last_check_utc. Returns (child_name, mod_dt)."""
+        """List direct child folders whose getlastmodified is after last_check_utc (both in UTC). Returns (child_name, mod_dt)."""
         raw = self._propfind_with_props(remote_path, depth="1")
         tree = ElementTree.fromstring(raw)
         ns = {"d": "DAV:"}
@@ -102,8 +102,11 @@ class OwnCloudAPI:
                 if mod_el is not None and mod_el.text:
                     try:
                         parsed = parsedate_to_datetime(mod_el.text.strip())
-                        # Compare using naive datetimes (drop timezone info if present)
-                        mod_dt = parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+                        # Normalize to UTC so comparisons are correct regardless of server timezone.
+                        if parsed.tzinfo is None:
+                            mod_dt = parsed.replace(tzinfo=timezone.utc)
+                        else:
+                            mod_dt = parsed.astimezone(timezone.utc)
                     except (ValueError, TypeError):
                         pass
                 if mod_dt is None or mod_dt > last_check_utc:
@@ -125,10 +128,11 @@ class OwnCloudAPI:
         Returns:
             list[str]: full paths like "hash1/LSI/subteam1/site1", "hash2/AML/foo/siteN", etc.
         """
+        # Always compare in UTC, using timezone-aware datetimes.
         if last_check.tzinfo is not None:
-            last_check_utc = last_check.astimezone().replace(tzinfo=None)
+            last_check_utc = last_check.astimezone(timezone.utc)
         else:
-            last_check_utc = last_check
+            last_check_utc = last_check.replace(tzinfo=timezone.utc)
         result = []
 
         for hash_name, _ in self._list_modified_collections("", last_check_utc):
@@ -144,19 +148,22 @@ class OwnCloudAPI:
         return result
 
     def get_new_config_files(self, remote_root: str, local_root: str, last_check: datetime) -> list[str]:
-        """Download JSON config files that are not yet present locally.
+        """Download JSON config files that were modified after last_check.
 
         The OwnCloud structure is flat: remote_root/<config_name>/<version>.json.
-        We list all config folders and JSON files using PROPFIND (Depth 1) with the
-        configs token, and only download files that do not exist in the corresponding
-        local subfolder. The last_check timestamp is accepted for future use but is
-        not currently used in this simplified implementation.
+        We list config folders and JSON files via PROPFIND (Depth 1) with the configs
+        token. Only files whose getlastmodified is after last_check (UTC) are downloaded;
+        local files are overwritten when the remote is newer.
         """
         import os
         os.makedirs(local_root, exist_ok=True)
 
+        if last_check.tzinfo is not None:
+            last_check_utc = last_check.astimezone(timezone.utc)
+        else:
+            last_check_utc = last_check.replace(tzinfo=timezone.utc)
+
         # First list config folders under remote_root (Depth 1, collections only).
-        # Normalize slashes so we don't end up with double '/' when owncloud_url already ends with one.
         raw = self._propfind_with_props(remote_root, depth="1", token_type="configs")
         tree = ElementTree.fromstring(raw)
         ns = {"d": "DAV:"}
@@ -175,7 +182,6 @@ class OwnCloudAPI:
             child_rel = href_path[len(base_path) + 1 :]
             if "/" in child_rel or not child_rel:
                 continue
-            # Must be a collection (folder)
             propstat = resp.find("d:propstat", ns)
             if propstat is None:
                 continue
@@ -189,11 +195,9 @@ class OwnCloudAPI:
 
         downloaded: list[str] = []
 
-        # If there are no subfolders, treat remote_root itself as the flat folder
         if not folder_names:
             folder_names = [""]
 
-        # For each config folder (or remote_root itself), list JSON files and download only those not present locally
         for folder in folder_names:
             if folder:
                 folder_remote = f"{remote_root.rstrip('/')}/{folder}"
@@ -206,18 +210,41 @@ class OwnCloudAPI:
 
             raw = self._propfind_with_props(folder_remote, depth="1", token_type="configs")
             tree = ElementTree.fromstring(raw)
+            base_folder_path = urlparse(
+                f"{self.owncloud_url.rstrip('/')}/{folder_remote.lstrip('/')}".rstrip("/")
+            ).path.rstrip("/")
+
             for resp in tree.findall("d:response", ns):
                 href_el = resp.find("d:href", ns)
                 if href_el is None or href_el.text is None:
                     continue
                 href_path = unquote(urlparse(href_el.text.strip()).path).rstrip("/")
-                base_folder_path = urlparse(
-                    f"{self.owncloud_url.rstrip('/')}/{folder_remote.lstrip('/')}".rstrip("/")
-                ).path.rstrip("/")
                 if href_path == base_folder_path or not href_path.startswith(base_folder_path + "/"):
                     continue
                 filename = href_path[len(base_folder_path) + 1 :]
                 if "/" in filename or not filename.lower().endswith(".json"):
+                    continue
+
+                # Only download if getlastmodified > last_check_utc.
+                mod_dt = None
+                for propstat in resp.findall("d:propstat", ns):
+                    status = propstat.find("d:status", ns)
+                    if status is None or status.text is None or "200" not in status.text:
+                        continue
+                    prop = propstat.find("d:prop", ns)
+                    if prop is None:
+                        continue
+                    if prop.find("d:collection", ns) is not None:
+                        continue  # skip collection entries
+                    mod_el = prop.find("d:getlastmodified", ns)
+                    if mod_el is not None and mod_el.text:
+                        try:
+                            parsed = parsedate_to_datetime(mod_el.text.strip())
+                            mod_dt = parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+                    break
+                if mod_dt is not None and mod_dt <= last_check_utc:
                     continue
 
                 file_url = f"{self.owncloud_url}/{folder_remote}/{filename}"
@@ -226,12 +253,16 @@ class OwnCloudAPI:
                     print(f"{r.status_code} - {r.text} (skipping {file_url})")
                     continue
                 local_path = os.path.join(local_folder, filename)
-                if os.path.exists(local_path):
-                    continue
                 with open(local_path, "w", encoding="utf-8") as f:
                     f.write(r.text)
                 downloaded.append(local_path)
 
+        if downloaded:
+            print(f">>> Downloaded {len(downloaded)} new config(s):")
+            for path in downloaded:
+                print(f"    {path}")
+        else:
+            print(">>> Config files up to date")
         return len(downloaded) != 0
 
     def get_remote_files(self, remote_path):

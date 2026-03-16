@@ -18,13 +18,16 @@ RUN python -m venv TRECollect-server && \
     pip install --upgrade pip && \
     if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# Add cron job to run script every minute and log output
+# Add cron jobs: processing every minute, statistics every 5 minutes
 RUN echo "* * * * * cd /app && flock -n /tmp/processing_script.lock /bin/bash /app/processing_script.sh" > /etc/cron.d/mycron && \
+    echo "*/5 * * * * cd /app && flock -n /tmp/statistics_script.lock /bin/bash /app/statistics_script.sh" >> /etc/cron.d/mycron && \
     chmod 0644 /etc/cron.d/mycron && \
     crontab /etc/cron.d/mycron
 
 # Make log folder available outside container
 VOLUME ["/app/logs"]
+VOLUME ["/app/statistics"]
+VOLUME ["/app/timestamps"]
 
 # Start cron in foreground
 CMD ["cron", "-f"]
