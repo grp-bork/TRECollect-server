@@ -76,8 +76,8 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
         rows.append(row)
 
     out_df = pd.DataFrame(rows, columns=columns)
-    out_df.to_csv("statistics.csv", index=False)
-    print(f">>> Statistics written to statistics.csv")
+    out_df.to_csv("statistics/statistics.csv", index=False)
+    print(f">>> Statistics written to statistics/statistics.csv")
 
     # Missing barcodes: per site, per sheet, list of barcode column names that are empty (in at least one row).
     missing_per_site: Dict[str, Dict[str, list]] = {}
@@ -103,7 +103,7 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
             missing_per_site[sid][sheet_name] = sorted(missing)
 
     if missing_per_site:
-        with open("missing_barcodes.md", "w", encoding="utf-8") as f:
+        with open("statistics/missing_barcodes.md", "w", encoding="utf-8") as f:
             f.write("# Missing barcode warnings\n\n")
             for site_id in sorted(missing_per_site.keys()):
                 f.write(f"## Site ID: {site_id}\n\n")
@@ -111,5 +111,5 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
                     missing = missing_per_site[site_id][sheet_name]
                     f.write(f"### {sheet_name}\n\n")
                     f.write(", ".join(f"`{col}`" for col in missing) + "\n\n")
-        print(">>> Missing barcode warnings written to missing_barcodes.md")
+        print(">>> Missing barcode warnings written to statistics/missing_barcodes.md")
  

@@ -26,6 +26,8 @@ RUN echo "* * * * * cd /app && flock -n /tmp/processing_script.lock /bin/bash /a
 
 # Make log folder available outside container
 VOLUME ["/app/logs"]
+VOLUME ["/app/statistics"]
+VOLUME ["/app/timestamps"]
 
 # Start cron in foreground
 CMD ["cron", "-f"]
