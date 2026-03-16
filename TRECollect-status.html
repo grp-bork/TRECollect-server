@@ -258,7 +258,7 @@
   <script>
     async function fetchText(path) {
       try {
-        const resp = await fetch(path);
+        const resp = await fetch(path, { cache: "no-store" });
         if (!resp.ok) {
           throw new Error(resp.status + " " + resp.statusText);
         }
@@ -345,7 +345,7 @@
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
 
-      fetch("statistics/coords.csv")
+      fetch("statistics/coords.csv", { cache: "no-store" })
         .then((resp) => (resp.ok ? resp.text() : null))
         .then((text) => {
           if (!text) return;
