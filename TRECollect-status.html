@@ -131,7 +131,7 @@
 </head>
 <body>
   <header>
-    <h1>TRECollect – Statistics & QA Overview</h1>
+    <h1>TRECollect – Sites Overview</h1>
   </header>
 
   <main>
@@ -139,7 +139,7 @@
     <section class="panel">
       <header>
         <h2>Sites overview</h2>
-        <p>Per site sheet completion – zeros indicate missing sheets.</p>
+        <p>Status of individual sites with respect to expected logsheet counts.</p>
       </header>
       <div class="panel-content" id="sites-overview">
         Loading statistics…
@@ -150,7 +150,7 @@
     <section class="panel">
       <header>
         <h2>Duplicated barcodes</h2>
-        <p>Barcode values used in more than one place.</p>
+        <p>Sheet ID - column name - site ID.</p>
       </header>
       <div class="panel-content" id="duplicated-barcodes">
         Loading duplicated barcode warnings…
@@ -161,7 +161,7 @@
     <section class="panel">
       <header>
         <h2>Missing barcodes</h2>
-        <p>Expected barcode fields that are empty.</p>
+        <p>Expected barcodes that are empty.</p>
       </header>
       <div class="panel-content" id="missing-barcodes">
         Loading missing barcode warnings…
@@ -362,9 +362,9 @@
     }
 
     (async function init() {
-      // 1. Sites overview
-      const statsCsv = await fetchText("statistics/statistics.csv");
-      renderSitesOverview(statsCsv, document.getElementById("sites-overview"));
+      // 1. Sites overview (from markdown summary)
+      const statsMd = await fetchText("statistics/statistics.md");
+      renderMarkdownMd(statsMd, document.getElementById("sites-overview"));
 
       // 2. Duplicated barcodes
       const dupMd = await fetchText("statistics/duplicated_barcodes.md");

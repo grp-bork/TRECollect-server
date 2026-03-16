@@ -75,7 +75,6 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
 
     # Build markdown overview per site.
     lines: list[str] = []
-    lines.append("# Sites overview\n")
     sheet_names = sorted(expected_counts.keys())
 
     for site_id in sorted(per_site.keys()):
@@ -92,10 +91,10 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
                 issues.append(f"- `{sheet}`: extra {diff} (expected {expected}, found {actual})")
 
         if not issues:
-            lines.append(f"## `{site_id}` ✓\n")
+            lines.append(f"## {site_id} ✓\n")
             lines.append("All sheets present with expected counts.\n")
         else:
-            lines.append(f"## `{site_id}` ✗\n")
+            lines.append(f"## {site_id} ✗\n")
             lines.extend(issues)
             lines.append("")  # blank line
 
@@ -132,7 +131,7 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
                 f.write(f"## Site ID: {site_id}\n\n")
                 for sheet_name in sorted(missing_per_site[site_id].keys()):
                     missing = missing_per_site[site_id][sheet_name]
-                    f.write(f"### {sheet_name}\n\n")
+                    f.write(f"* **{sheet_name}**: ")
                     f.write(", ".join(f"`{col}`" for col in missing) + "\n\n")
         print(">>> Missing barcode warnings written to statistics/missing_barcodes.md")
 
@@ -171,14 +170,14 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
     if duplicates:
         with open("statistics/duplicated_barcodes.md", "w", encoding="utf-8") as f:
             for barcode_val in sorted(duplicates.keys()):
-                f.write(f"`{barcode_val}`\n\n")
+                f.write(f"### {barcode_val}\n\n")
                 for sheet_name in sorted(duplicates[barcode_val].keys()):
                     for col in sorted(duplicates[barcode_val][sheet_name].keys()):
                         site_ids = sorted({sid for sid in duplicates[barcode_val][sheet_name][col] if sid})
                         if not site_ids:
                             continue
                         sites_str = ", ".join(f"`{sid}`" for sid in site_ids)
-                        f.write(f"`{sheet_name}` - `{col}` - {sites_str}\n")
+                        f.write(f"* `{sheet_name}` - `{col}` - {sites_str}\n")
                 f.write("\n\n")
         print(">>> Duplicated barcode errors written to statistics/duplicated_barcodes.md")
  
