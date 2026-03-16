@@ -5,6 +5,17 @@
   <meta http-equiv="refresh" content="60" />
   <title>TRECollect – Statistics Overview</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -208,9 +219,20 @@
         Loading missing barcode warnings…
       </div>
     </section>
+
+    <!-- 4. Map -->
+    <section class="panel">
+      <header>
+        <h2>Sampling locations map</h2>
+        <p>Map of coordinates from the latest submissions.</p>
+      </header>
+      <div class="panel-content" style="padding: 0; max-height: none; height: 420px;">
+        <div id="map" style="width: 100%; height: 100%;"></div>
+      </div>
+    </section>
   </main>
 
-  <!-- 4 & 5. Logs (hideable) -->
+  <!-- 5 & 6. Logs (hideable) -->
   <details>
     <summary>Logs</summary>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
@@ -294,6 +316,95 @@
       // 5. Statistics log
       const statisticsLog = await fetchText("logs/statistics.log");
       renderPlainText(statisticsLog, document.getElementById("statistics-log"));
+    })();
+
+    // Initialize OpenStreetMap (Leaflet) map with coordinates from CSV
+    (function initMap() {
+      if (typeof L === "undefined") return;
+
+      const mapElement = document.getElementById("map");
+      if (!mapElement) return;
+
+      const map = L.map(mapElement).setView([50.1265, 14.4179], 6);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 18,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+
+      fetch("statistics/coords.csv")
+        .then((resp) => (resp.ok ? resp.text() : null))
+        .then((text) => {
+          if (!text) return;
+          const lines = text.trim().split("\n");
+          if (lines.length <= 1) return;
+
+          const header = lines[0].split(",");
+          const idxLabel = header.indexOf("label");
+          const idxSite = header.indexOf("Site ID");
+          const idxLat = header.indexOf("latitude");
+          const idxLon = header.indexOf("longitude");
+          if (idxLabel === -1 || idxSite === -1 || idxLat === -1 || idxLon === -1) {
+            return;
+          }
+
+          const siteColors = new Map();
+          const palette = [
+            "#ef4444",
+            "#22c55e",
+            "#3b82f6",
+            "#eab308",
+            "#a855f7",
+            "#f97316",
+            "#06b6d4",
+            "#84cc16",
+            "#ec4899",
+            "#6366f1",
+          ];
+          let paletteIndex = 0;
+
+          const latlngs = [];
+
+          lines.slice(1).forEach((line) => {
+            if (!line.trim()) return;
+            const parts = line.split(",");
+            if (parts.length <= Math.max(idxLabel, idxSite, idxLat, idxLon)) return;
+
+            const lat = parseFloat(parts[idxLat]);
+            const lon = parseFloat(parts[idxLon]);
+            if (Number.isNaN(lat) || Number.isNaN(lon)) return;
+
+            const label = parts[idxLabel] || "";
+            const siteId = parts[idxSite] || "";
+
+            if (!siteColors.has(siteId)) {
+              const color = palette[paletteIndex % palette.length];
+              paletteIndex += 1;
+              siteColors.set(siteId, color);
+            }
+            const color = siteColors.get(siteId);
+
+            const latlng = [lat, lon];
+            const marker = L.circleMarker(latlng, {
+              radius: 6,
+              color,
+              fillColor: color,
+              fillOpacity: 0.8,
+              weight: 1,
+            }).addTo(map);
+
+            const popupContent = `<strong>${siteId || "Location"}</strong><br/>${label}`;
+            marker.bindPopup(popupContent);
+
+            latlngs.push(latlng);
+          });
+
+          if (latlngs.length) {
+            map.fitBounds(latlngs, { padding: [20, 20] });
+          }
+        })
+        .catch(() => {});
     })();
   </script>
 </body>

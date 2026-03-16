@@ -248,7 +248,7 @@ def _compute_coordinates(data: Dict[str, pd.DataFrame]) -> None:
 
     df_out = pd.DataFrame(rows)
     df_out.to_csv("statistics/coords.csv", index=False)
-    print(">>> Coordinates written to coords.csv")
+    print(">>> Coordinates written to statistics/coords.csv")
 
 
 def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str, dict]) -> None:
