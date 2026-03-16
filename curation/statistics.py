@@ -8,10 +8,14 @@ from __future__ import annotations
 from typing import Dict, Set
 import json
 import pandas as pd
+from datetime import datetime
 
 
 def _barcode_columns_per_sheet(configs: Dict[str, dict]) -> Dict[str, Set[str]]:
-    """From configs (config_name -> version -> config dict), build sheet_name -> set of barcode field labels."""
+    """From configs (config_name -> version -> config dict), build sheet_name -> set of barcode field labels.
+
+    Also supports dynamic fields with subFields that contain barcode fields.
+    """
     name_to_barcodes: Dict[str, Set[str]] = {}
     for versions in configs.values():
         if not isinstance(versions, dict):
@@ -23,8 +27,26 @@ def _barcode_columns_per_sheet(configs: Dict[str, dict]) -> Dict[str, Set[str]]:
             if not name:
                 continue
             fields = config.get("fields") or []
-            barcodes = {f["label"] for f in fields if isinstance(f, dict) and f.get("type") == "barcode"}
-            name_to_barcodes.setdefault(name, set()).update(barcodes)
+            barcodes: Set[str] = set()
+            for f in fields:
+                if not isinstance(f, dict):
+                    continue
+                f_type = f.get("type")
+                if f_type == "barcode":
+                    label = f.get("label")
+                    if label:
+                        barcodes.add(label)
+                elif f_type == "dynamic":
+                    # Dynamic fields can have nested subFields; collect any barcode labels there.
+                    for sf in f.get("subFields") or []:
+                        if not isinstance(sf, dict):
+                            continue
+                        if sf.get("type") == "barcode":
+                            label = sf.get("label")
+                            if label:
+                                barcodes.add(label)
+            if barcodes:
+                name_to_barcodes.setdefault(name, set()).update(barcodes)
     # Merged sheet LSI 14: union barcode fields from LSI 14-1, 14-2, 14-3.
     for part in ("LSI 14-1", "LSI 14-2", "LSI 14-3"):
         if part in name_to_barcodes:
@@ -53,6 +75,9 @@ def _compute_site_overview(data: Dict[str, pd.DataFrame]) -> None:
             per_site[sid][sheet_name] = count
 
     if not per_site:
+        with open("statistics/statistics.md", "w", encoding="utf-8") as f:
+            pass
+        print(">>> Site overview written to statistics/statistics.md (no sites)")
         return
 
     try:
@@ -100,10 +125,15 @@ def _compute_missing_barcodes(
     for sheet_name, df in data.items():
         if df.empty or "Site ID" not in df.columns:
             continue
-        barcode_cols = barcode_by_sheet.get(sheet_name, set())
-        if not barcode_cols:
+        patterns = barcode_by_sheet.get(sheet_name, set())
+        if not patterns:
             continue
-        barcode_cols = [c for c in barcode_cols if c in df.columns]
+        # Match barcode columns by substring to support dynamic instances that prefix labels.
+        barcode_cols = [
+            col
+            for col in df.columns
+            if any(pat and pat in str(col) for pat in patterns)
+        ]
         if not barcode_cols:
             continue
         site_col = df["Site ID"].dropna().astype(str).str.strip()
@@ -117,10 +147,11 @@ def _compute_missing_barcodes(
                 missing_per_site[sid] = {}
             missing_per_site[sid][sheet_name] = sorted(missing)
 
-    if not missing_per_site:
-        return
-
     with open("statistics/missing_barcodes.md", "w", encoding="utf-8") as f:
+        if not missing_per_site:
+            print(">>> Missing barcode warnings written to statistics/missing_barcodes.md (none)")
+            return
+
         for site_id in sorted(missing_per_site.keys()):
             f.write(f"## Site ID: {site_id}\n\n")
             for sheet_name in sorted(missing_per_site[site_id].keys()):
@@ -134,44 +165,46 @@ def _compute_duplicated_barcodes(
     data: Dict[str, pd.DataFrame],
     barcode_by_sheet: Dict[str, Set[str]],
 ) -> None:
+    # duplicates: barcode_val -> sheet_name -> column_name -> [site_ids]
     duplicates: Dict[str, Dict[str, Dict[str, list]]] = {}
     for sheet_name, df in data.items():
         if df.empty or "Site ID" not in df.columns:
             continue
-        barcode_cols = barcode_by_sheet.get(sheet_name, set())
-        if not barcode_cols:
+        patterns = barcode_by_sheet.get(sheet_name, set())
+        if not patterns:
             continue
-        barcode_cols = [c for c in barcode_cols if c in df.columns]
+        barcode_cols = [col for col in df.columns if any(pat and pat in str(col) for pat in patterns)]
         if not barcode_cols:
             continue
         site_col = df["Site ID"].astype(str).str.strip()
         for col in barcode_cols:
             values = df[col].astype(str).str.strip()
-            values_nonempty = values[values != ""]
-            if values_nonempty.empty:
-                continue
-            counts = values_nonempty.value_counts()
-            dup_values = counts[counts > 1].index
-            if not len(dup_values):
-                continue
-            for barcode_val in dup_values:
-                mask = values == barcode_val
-                site_ids = site_col[mask].dropna().str.strip()
-                site_ids = sorted({sid for sid in site_ids if sid})
-                if not site_ids:
+            for idx, barcode_val in enumerate(values):
+                barcode_val = barcode_val.strip()
+                if not barcode_val:
                     continue
-                for sid in site_ids:
-                    duplicates.setdefault(barcode_val, {}).setdefault(sheet_name, {}).setdefault(col, []).append(sid)
+                sid = site_col.iloc[idx].strip()
+                if not sid:
+                    continue
+                duplicates.setdefault(barcode_val, {}).setdefault(sheet_name, {}).setdefault(col, []).append(sid)
 
-    if not duplicates:
-        return
+    # Keep only barcodes that occur more than once anywhere (across sites and sheets).
+    filtered_duplicates: Dict[str, Dict[str, Dict[str, list]]] = {}
+    for barcode_val, sheets in duplicates.items():
+        total_occurrences = sum(len(site_ids) for cols in sheets.values() for site_ids in cols.values())
+        if total_occurrences > 1:
+            filtered_duplicates[barcode_val] = sheets
 
     with open("statistics/duplicated_barcodes.md", "w", encoding="utf-8") as f:
-        for barcode_val in sorted(duplicates.keys()):
+        if not filtered_duplicates:
+            print(">>> Duplicated barcode errors written to statistics/duplicated_barcodes.md (none)")
+            return
+
+        for barcode_val in sorted(filtered_duplicates.keys()):
             f.write(f"### {barcode_val}\n\n")
-            for sheet_name in sorted(duplicates[barcode_val].keys()):
-                for col in sorted(duplicates[barcode_val][sheet_name].keys()):
-                    site_ids = sorted({sid for sid in duplicates[barcode_val][sheet_name][col] if sid})
+            for sheet_name in sorted(filtered_duplicates[barcode_val].keys()):
+                for col in sorted(filtered_duplicates[barcode_val][sheet_name].keys()):
+                    site_ids = sorted({sid for sid in filtered_duplicates[barcode_val][sheet_name][col] if sid})
                     if not site_ids:
                         continue
                     sites_str = ", ".join(f"`{sid}`" for sid in site_ids)
@@ -244,6 +277,10 @@ def _compute_coordinates(data: Dict[str, pd.DataFrame]) -> None:
                 _add_row(site_id, label, lat, lon)
 
     if not rows:
+        pd.DataFrame(columns=["label", "Site ID", "latitude", "longitude"]).to_csv(
+            "statistics/coords.csv", index=False
+        )
+        print(">>> Coordinates written to statistics/coords.csv (none)")
         return
 
     df_out = pd.DataFrame(rows)
@@ -258,6 +295,7 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
     data: sheet_name -> DataFrame (complete contents of each sheet after curation).
     configs: configuration dicts used for determining barcode columns.
     """
+    print(f">>> Computing statistics at {datetime.now().isoformat()}")
     barcode_by_sheet = _barcode_columns_per_sheet(configs) if configs else {}
 
     _compute_site_overview(data)

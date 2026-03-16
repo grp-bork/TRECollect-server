@@ -164,6 +164,10 @@
       color: #b91c1c;
       font-weight: 500;
     }
+    .empty-state {
+      color: #6b7280;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
@@ -265,8 +269,12 @@
     }
 
     function renderPlainText(text, container) {
-      if (!text) {
+      if (text === null || text === undefined) {
         container.innerHTML = '<span class="error">Unable to load log.</span>';
+        return;
+      }
+      if (typeof text === "string" && text.trim() === "") {
+        container.innerHTML = '<span class="empty-state">No data to load.</span>';
         return;
       }
       const pre = document.createElement("pre");
@@ -276,8 +284,12 @@
     }
 
     function renderMarkdownMd(text, container) {
-      if (!text) {
+      if (text === null || text === undefined) {
         container.innerHTML = '<span class="error">Unable to load file.</span>';
+        return;
+      }
+      if (typeof text === "string" && text.trim() === "") {
+        container.innerHTML = '<span class="empty-state">No data to load.</span>';
         return;
       }
       container.innerHTML = marked.parse(text);
