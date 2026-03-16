@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="60" />
+  <meta http-equiv="refresh" content="300" />
   <title>TRECollect – Statistics Overview</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <link
@@ -198,7 +198,18 @@
       </div>
     </section>
 
-    <!-- 2. Duplicated barcodes -->
+     <!-- 2. Map -->
+     <section class="panel">
+      <header>
+        <h2>Sampling locations map</h2>
+        <p>Map of coordinates from the latest submissions.</p>
+      </header>
+      <div class="panel-content" style="padding: 0; max-height: none; height: 420px;">
+        <div id="map" style="width: 100%; height: 100%;"></div>
+      </div>
+    </section>
+
+    <!-- 3. Duplicated barcodes -->
     <section class="panel">
       <header>
         <h2>Duplicated barcodes</h2>
@@ -209,7 +220,7 @@
       </div>
     </section>
 
-    <!-- 3. Missing barcodes -->
+    <!-- 4. Missing barcodes -->
     <section class="panel">
       <header>
         <h2>Missing barcodes</h2>
@@ -217,17 +228,6 @@
       </header>
       <div class="panel-content" id="missing-barcodes">
         Loading missing barcode warnings…
-      </div>
-    </section>
-
-    <!-- 4. Map -->
-    <section class="panel">
-      <header>
-        <h2>Sampling locations map</h2>
-        <p>Map of coordinates from the latest submissions.</p>
-      </header>
-      <div class="panel-content" style="padding: 0; max-height: none; height: 420px;">
-        <div id="map" style="width: 100%; height: 100%;"></div>
       </div>
     </section>
   </main>
