@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Dict, Set
 import json
 import pandas as pd
-from datetime import datetime
 
 
 def _barcode_columns_per_sheet(configs: Dict[str, dict]) -> Dict[str, Set[str]]:
@@ -295,7 +294,6 @@ def compute_and_save_statistics(data: Dict[str, pd.DataFrame], configs: Dict[str
     data: sheet_name -> DataFrame (complete contents of each sheet after curation).
     configs: configuration dicts used for determining barcode columns.
     """
-    print(f">>> Computing statistics at {datetime.now().isoformat()}")
     barcode_by_sheet = _barcode_columns_per_sheet(configs) if configs else {}
 
     _compute_site_overview(data)
