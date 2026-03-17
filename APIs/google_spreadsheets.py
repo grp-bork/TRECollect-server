@@ -196,14 +196,17 @@ class GoogleAPI:
 
     @rate_limited_with_retry()
     def clear_worksheet_data(self, file_key, worksheet):
-        """Clear all data from a worksheet
+        """Clear all data rows from a worksheet, preserving the header row (and its formatting).
         
         Args:
             file_key (str): identifier of Google sheet
             worksheet (str): identifier of sheet tab
         """
         sheet = self.access_sheet(file_key, worksheet)
-        header = sheet.row_values(1)
-        sheet.clear()
-        sheet.update('1:1', [header])
+        last_row = sheet.row_count
+        if last_row <= 1:
+            return
+        # Clear everything below the first row, leaving headers (and their formatting) intact.
+        # This uses A1 notation "2:<last_row>" to wipe rows 2..N.
+        sheet.batch_clear([f"2:{last_row}"])
         sheet.freeze(rows=1)
