@@ -241,7 +241,10 @@ class GoogleAPI:
 
         # Ensure we can delete all existing sheets by creating a temporary one.
         tmp_title = "__tmp_backup__"
-        tmp = target.add_worksheet(title=tmp_title, rows=10, cols=10)
+        try:
+            tmp = target.worksheet(tmp_title)
+        except WorksheetNotFound:
+            tmp = target.add_worksheet(title=tmp_title, rows=10, cols=10)
 
         # Delete everything that existed in target.
         for ws in [w for w in target.worksheets() if w.id != tmp.id]:
@@ -249,7 +252,9 @@ class GoogleAPI:
 
         copied_worksheets = []
         for ws in source_sheets:
-            new_sheet_id = ws.copy_to(target_file_key)
+            copy_result = ws.copy_to(target_file_key)
+            # gspread returns {"sheetId": <int>} for copy_to
+            new_sheet_id = copy_result["sheetId"] if isinstance(copy_result, dict) else copy_result
             new_ws = target.get_worksheet_by_id(new_sheet_id)
             new_ws.update_title(ws.title)
             copied_worksheets.append(new_ws)
