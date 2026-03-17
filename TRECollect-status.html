@@ -237,7 +237,7 @@
     </section>
   </main>
 
-  <!-- 5 & 6. Logs (hideable) -->
+  <!-- 5, 6 & 7. Logs (hideable) -->
   <details>
     <summary>Logs</summary>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem;">
@@ -251,6 +251,12 @@
         <h3>Statistics log</h3>
         <div class="logs" id="statistics-log">
           Loading statistics log…
+        </div>
+      </section>
+      <section>
+        <h3>Backups log</h3>
+        <div class="logs" id="backups-log">
+          Loading backups log…
         </div>
       </section>
     </div>
@@ -329,6 +335,10 @@
       // 5. Statistics log
       const statisticsLog = await fetchText("logs/statistics.log");
       renderPlainText(statisticsLog, document.getElementById("statistics-log"));
+
+      // 6. Backups log
+      const backupsLog = await fetchText("logs/backups.log");
+      renderPlainText(backupsLog, document.getElementById("backups-log"));
     })();
 
     // Initialize OpenStreetMap (Leaflet) map with coordinates from CSV
