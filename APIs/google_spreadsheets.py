@@ -4,7 +4,7 @@ from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 from typing import Optional, List
 from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
+import datetime
 
 from APIs.utils import rate_limited_with_retry, clean_up_nulls, create_keyfile_dict
 
@@ -259,3 +259,11 @@ class GoogleAPI:
 
         # Remove temporary sheet.
         target.del_worksheet(tmp)
+
+    def detect_changes(self, file_key: str, last_timestamp: datetime.datetime) -> bool:
+        """
+        Return True if the given spreadsheet was modified after last_timestamp.
+        """
+        modified_time = self.get_modified_time(file_key)
+        modified_time = datetime.datetime.fromisoformat(modified_time)
+        return modified_time > last_timestamp
