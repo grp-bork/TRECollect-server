@@ -15,6 +15,7 @@ class GoogleAPI:
         creds = ServiceAccountCredentials.from_json_keyfile_dict(create_keyfile_dict(), scope)
         self.client = gspread.authorize(creds)
 
+    @rate_limited_with_retry()
     def get_modified_time(self, file_key):
         scopes = ["https://www.googleapis.com/auth/drive.metadata.readonly"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(create_keyfile_dict(), scopes)
@@ -175,6 +176,7 @@ class GoogleAPI:
             print(f"Error getting worksheets: {e}")
             return []
 
+    @rate_limited_with_retry()
     def read_tables(self, file_key, sheet_names: Optional[List[str]] = None):
         """Load specified worksheets in the spreadsheet as DataFrames.
         

@@ -18,6 +18,7 @@ def detect_changes(google_api: GoogleAPI, lsi_target_sheet_id: str, last_statist
 def main():
     load_dotenv('CONFIG.env')
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))
+    print(f">>> Computing statistics at {now.isoformat()}")
     google_api = GoogleAPI()
     lsi_target_sheet_id = os.environ.get('LSI_SHEET_LATEST_SUBMISSIONS_ID')
 

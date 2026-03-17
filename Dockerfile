@@ -28,6 +28,7 @@ RUN echo "* * * * * cd /app && flock -n /tmp/processing_script.lock /bin/bash /a
 VOLUME ["/app/logs"]
 VOLUME ["/app/statistics"]
 VOLUME ["/app/timestamps"]
+VOLUME ["/export"]
 
-# Start cron in foreground
-CMD ["cron", "-f"]
+# Copy status page to export, then start cron
+CMD ["sh", "-c", "mkdir -p /export && cp /app/TRECollect-status.html /export/ && exec cron -f"]

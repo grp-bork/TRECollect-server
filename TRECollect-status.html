@@ -89,7 +89,8 @@
     .panel-content {
       padding: 0.75rem 1rem 1rem;
       overflow: auto;
-      max-height: 320px;
+      flex: 1 1 auto;
+      min-height: 0;
       font-size: 0.85rem;
       background: #f9fafb;
     }
@@ -258,7 +259,7 @@
   <script>
     async function fetchText(path) {
       try {
-        const resp = await fetch(path);
+        const resp = await fetch(path, { cache: "no-store" });
         if (!resp.ok) {
           throw new Error(resp.status + " " + resp.statusText);
         }
@@ -345,7 +346,22 @@
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       }).addTo(map);
 
-      fetch("statistics/coords.csv")
+      function pinIcon(color) {
+        const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="25" height="41" viewBox="0 0 25 41">
+  <path d="M12.5 0C5.596 0 0 5.596 0 12.5c0 9.375 12.5 28.5 12.5 28.5S25 21.875 25 12.5C25 5.596 19.404 0 12.5 0z" fill="${color}" stroke="#111827" stroke-width="1"/>
+  <circle cx="12.5" cy="12.5" r="5.25" fill="#ffffff" opacity="0.9"/>
+</svg>`;
+
+        return L.icon({
+          iconUrl: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+        });
+      }
+
+      fetch("statistics/coords.csv", { cache: "no-store" })
         .then((resp) => (resp.ok ? resp.text() : null))
         .then((text) => {
           if (!text) return;
@@ -398,13 +414,7 @@
             const color = siteColors.get(siteId);
 
             const latlng = [lat, lon];
-            const marker = L.circleMarker(latlng, {
-              radius: 6,
-              color,
-              fillColor: color,
-              fillOpacity: 0.8,
-              weight: 1,
-            }).addTo(map);
+            const marker = L.marker(latlng, { icon: pinIcon(color) }).addTo(map);
 
             const popupContent = `<strong>${siteId || "Location"}</strong><br/>${label}`;
             marker.bindPopup(popupContent);
