@@ -4,7 +4,7 @@ from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 from typing import Optional, List
 from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
+import datetime
 
 from APIs.utils import rate_limited_with_retry, clean_up_nulls, create_keyfile_dict
 
@@ -196,14 +196,79 @@ class GoogleAPI:
 
     @rate_limited_with_retry()
     def clear_worksheet_data(self, file_key, worksheet):
-        """Clear all data from a worksheet
+        """Clear all data rows from a worksheet, preserving the header row (and its formatting).
         
         Args:
             file_key (str): identifier of Google sheet
             worksheet (str): identifier of sheet tab
         """
         sheet = self.access_sheet(file_key, worksheet)
-        header = sheet.row_values(1)
-        sheet.clear()
-        sheet.update('1:1', [header])
+        last_row = sheet.row_count
+        if last_row <= 1:
+            return
+        # Clear everything below the first row, leaving headers (and their formatting) intact.
+        # This uses A1 notation "2:<last_row>" to wipe rows 2..N.
+        sheet.batch_clear([f"2:{last_row}"])
         sheet.freeze(rows=1)
+
+    @rate_limited_with_retry()
+    def backup_spreadsheet(self, source_file_key: str, target_file_key: str) -> None:
+        """
+        Replace the contents of the target spreadsheet with an exact copy
+        of all worksheets from the source spreadsheet.
+
+        Whatever existed in the target spreadsheet before is discarded.
+
+        This uses Google Sheets' native sheet copy operation so values and formatting
+        are preserved.
+        """
+        source = self.client.open_by_key(source_file_key)
+        target = self.client.open_by_key(target_file_key)
+
+        source_sheets = source.worksheets()
+        if not source_sheets:
+            # If there's nothing to copy, just clear the target completely (leave a single empty sheet).
+            existing = target.worksheets()
+            if len(existing) == 0:
+                target.add_worksheet(title="Sheet1", rows=100, cols=26)
+                return
+            # Keep one sheet, delete the rest, and clear its contents.
+            keep = existing[0]
+            for ws in existing[1:]:
+                target.del_worksheet(ws)
+            keep.clear()
+            return
+
+        # Ensure we can delete all existing sheets by creating a temporary one.
+        tmp_title = "__tmp_backup__"
+        try:
+            tmp = target.worksheet(tmp_title)
+        except WorksheetNotFound:
+            tmp = target.add_worksheet(title=tmp_title, rows=10, cols=10)
+
+        # Delete everything that existed in target.
+        for ws in [w for w in target.worksheets() if w.id != tmp.id]:
+            target.del_worksheet(ws)
+
+        copied_worksheets = []
+        for ws in source_sheets:
+            copy_result = ws.copy_to(target_file_key)
+            # gspread returns {"sheetId": <int>} for copy_to
+            new_sheet_id = copy_result["sheetId"] if isinstance(copy_result, dict) else copy_result
+            new_ws = target.get_worksheet_by_id(new_sheet_id)
+            new_ws.update_title(ws.title)
+            copied_worksheets.append(new_ws)
+
+        # Reorder to match source order.
+        target.reorder_worksheets(copied_worksheets + [tmp])
+
+        # Remove temporary sheet.
+        target.del_worksheet(tmp)
+
+    def detect_changes(self, file_key: str, last_timestamp: datetime.datetime) -> bool:
+        """
+        Return True if the given spreadsheet was modified after last_timestamp.
+        """
+        modified_time = self.get_modified_time(file_key)
+        modified_time = datetime.datetime.fromisoformat(modified_time)
+        return modified_time > last_timestamp

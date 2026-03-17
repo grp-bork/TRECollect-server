@@ -19,12 +19,7 @@ def cleanup_spreadsheet(env_key: str) -> None:
     spreadsheet = api.client.open_by_key(file_key)
 
     for ws in spreadsheet.worksheets():
-        # Clear everything below the first row, leaving headers (and their formatting) intact.
-        # This uses A1 notation "2:<last_row>" to wipe rows 2..N.
-        last_row = ws.row_count
-        if last_row <= 1:
-            continue
-        ws.batch_clear([f"2:{last_row}"])
+        api.clear_worksheet_data(file_key, ws.title)
         print(f"Cleared data rows in sheet '{ws.title}' (kept header).")
 
 
