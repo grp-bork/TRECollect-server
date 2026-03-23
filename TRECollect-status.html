@@ -37,6 +37,11 @@
       margin: 0;
       font-size: 1.4rem;
     }
+    .header-links {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
     .header-title {
       display: inline-flex;
       align-items: center;
@@ -195,21 +200,37 @@
       <span id="processing-status-dot" class="status-dot" aria-label="Processing status"></span>
       <h1>TRECollect – Sites Overview</h1>
     </div>
-    <a
-      id="sheets-link"
-      class="header-link"
-      href="#"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="#0F9D58" d="M6 2h9l5 5v15H6z"/>
-        <path fill="#34A853" d="M20 7h-4V3z"/>
-        <path fill="#E6F4EA" d="M9 10h6v1H9zm0 3h6v1H9zm0 3h3v1H9z"/>
-        <path fill="none" d="M0 0h24v24H0z"/>
-      </svg>
-      <span>Latest submissions sheet</span>
-    </a>
+    <div class="header-links">
+      <a
+        class="header-link"
+        href="https://github.com/grp-bork/TRECollect/wiki/Installation"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            fill="#e5e7eb"
+            d="M12 2C6.477 2 2 6.592 2 12.256c0 4.526 2.865 8.365 6.839 9.723.5.096.683-.224.683-.5 0-.243-.009-.888-.014-1.743-2.782.616-3.37-1.379-3.37-1.379-.455-1.18-1.112-1.495-1.112-1.495-.91-.64.069-.627.069-.627 1.006.073 1.534 1.065 1.534 1.065.893 1.566 2.341 1.113 2.91.851.091-.668.35-1.113.636-1.368-2.22-.262-4.555-1.142-4.555-5.085 0-1.124.39-2.04 1.029-2.76-.103-.26-.446-1.315.098-2.74 0 0 .84-.274 2.75 1.05A9.2 9.2 0 0 1 12 7.07a9.2 9.2 0 0 1 2.5.345c1.91-1.324 2.748-1.05 2.748-1.05.546 1.425.202 2.48.1 2.74.64.72 1.028 1.636 1.028 2.76 0 3.954-2.339 4.82-4.566 5.078.36.322.679.952.679 1.92 0 1.387-.012 2.504-.012 2.846 0 .277.18.602.688.5 3.969-1.362 6.828-5.196 6.828-9.72C22 6.592 17.523 2 12 2Z"
+          />
+        </svg>
+        <span>Wiki</span>
+      </a>
+      <a
+        id="sheets-link"
+        class="header-link"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#0F9D58" d="M6 2h9l5 5v15H6z" />
+          <path fill="#34A853" d="M20 7h-4V3z" />
+          <path fill="#E6F4EA" d="M9 10h6v1H9zm0 3h6v1H9zm0 3h3v1H9z" />
+          <path fill="none" d="M0 0h24v24H0z" />
+        </svg>
+        <span>Latest submissions sheet</span>
+      </a>
+    </div>
   </header>
 
   <main>
