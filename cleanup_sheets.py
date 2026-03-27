@@ -24,15 +24,14 @@ def cleanup_spreadsheet(env_key: str) -> None:
 
 
 def main(argv: list[str]) -> None:
-    if len(argv) != 2:
-        prog = os.path.basename(argv[0] or "cleanup_sheets.py")
-        print(f"Usage: python {prog} <ENV_VAR_WITH_SHEET_ID>")
-        print("Example: python cleanup_sheets.py LSI_SHEET_LATEST_SUBMISSIONS_ID")
-        raise SystemExit(1)
-
     env_key = argv[1]
-    cleanup_spreadsheet(env_key)
-
+    if ',' in env_key:
+        for key in env_key.split(','):
+            print(f">>> Cleaning up spreadsheet {key}...")
+            cleanup_spreadsheet(key)
+    else:
+        print(f">>> Cleaning up spreadsheet {env_key}...")
+        cleanup_spreadsheet(env_key)
 
 if __name__ == "__main__":
     main(sys.argv)
