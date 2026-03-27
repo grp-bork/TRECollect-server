@@ -123,10 +123,8 @@ def _upsert_by_key(
         matches = combined_df.index[combined_df[key_column] == key_val].tolist()
 
         if not matches:
-            combined_df = pd.concat(
-                [combined_df, pd.DataFrame([row_dict])],
-                ignore_index=True,
-            )
+            # Append one row without concat/reindex to avoid issues with non-unique indices.
+            combined_df.loc[len(combined_df)] = row_dict
         else:
             idx = matches[0]
             for col, val in row_dict.items():
@@ -183,14 +181,16 @@ def apply_output_rules(
             for s in sources:
                 consumed_sources.add(s)
 
+            # 1) Start from current target table content.
             existing = existing_sheets.get(target, pd.DataFrame())
             combined = existing.copy()
 
+            # 2) Upsert all new rows coming from all source sheets into the same output table.
             for src in sources:
-                if src in curated_rows:
-                    df = curated_rows[src]
-                    if not df.empty:
-                        combined = _upsert_by_key(combined, df, key_column)
+                df = curated_rows.get(src, pd.DataFrame())
+                if df.empty:
+                    continue
+                combined = _upsert_by_key(combined, df, key_column)
 
             # Optional rule extras: recompute a \"Total score\" column after merging.
             total_col = rule.get("total_score_column")
@@ -198,9 +198,9 @@ def apply_output_rules(
             if total_col and total_kw:
                 combined = _recompute_total_score(combined, total_col, total_kw)
 
-            if not combined.empty:
-                rows_to_write[target] = combined
-                overwrite_sheets.add(target)
+            # 3) MERGE_UPSERT target is always replaced, never appended.
+            rows_to_write[target] = combined
+            overwrite_sheets.add(target)
 
     for sheet_name, df in curated_rows.items():
         if sheet_name in consumed_sources:
