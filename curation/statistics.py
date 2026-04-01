@@ -255,24 +255,16 @@ def _compute_coordinates(data: Dict[str, pd.DataFrame]) -> None:
 
     lsi8 = data.get("LSI 8")
     if lsi8 is not None and not lsi8.empty and "Site ID" in lsi8.columns:
-        for col in lsi8.columns:
-            if not col.startswith("Water collection - Carboy ") or "GPS coordinates - latitude" not in col:
-                continue
-            try:
-                prefix, rest = col.split("Carboy ", 1)
-                carboy_num = rest.split(" -", 1)[0].strip()
-            except ValueError:
-                continue
-            lon_col = col.replace("GPS coordinates - latitude", "GPS coordinates - longitude")
-            if lon_col not in lsi8.columns:
-                continue
+        lat_col = "Water collection GPS coordinates - latitude"
+        lon_col = "Water collection GPS coordinates - longitude"
+        if lat_col in lsi8.columns and lon_col in lsi8.columns:
             for _, row in lsi8.iterrows():
                 site_id = str(row.get("Site ID", "")).strip()
                 if not site_id:
                     continue
-                lat = row.get(col)
+                lat = row.get(lat_col)
                 lon = row.get(lon_col)
-                label = f"{site_id}: shoreline transect - Carboy {carboy_num}"
+                label = f"{site_id}: shoreline transect"
                 _add_row(site_id, label, lat, lon)
 
     if not rows:
