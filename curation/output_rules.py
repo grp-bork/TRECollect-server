@@ -7,9 +7,7 @@ Each rule is a dict; supported types are documented in apply_output_rules.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set, Tuple, Optional
-import datetime as dt
-from collections import Counter
+from typing import Any, Dict, List, Set, Tuple
 
 import pandas as pd
 
@@ -17,7 +15,6 @@ import pandas as pd
 # Rule type for merging several source sheets into one target sheet,
 # upserting by a key column and never overwriting non-empty with empty.
 MERGE_UPSERT = "merge_upsert"
-WEATHER_FROM_LSI1 = "weather_from_lsi1"
 
 # Default rules: add more dicts here or load from file later.
 OUTPUT_RULES: List[Dict[str, Any]] = [
@@ -31,11 +28,6 @@ OUTPUT_RULES: List[Dict[str, Any]] = [
         # the word \"total\".
         "total_score_column": "Total score",
         "total_from_contains": "total",
-    },
-    {
-        "type": WEATHER_FROM_LSI1,
-        "source": "LSI 1",
-        "target": "Weather"
     },
 ]
 
@@ -227,221 +219,3 @@ def sheets_to_load_for_rules(rules: List[Dict[str, Any]]) -> Set[str]:
         if rule.get("type") == MERGE_UPSERT and rule.get("target"):
             out.add(rule["target"])
     return out
-
-
-def _to_float(value: Any) -> Optional[float]:
-    try:
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _first_existing(row: pd.Series, candidates: List[str]) -> Any:
-    for key in candidates:
-        if key in row.index:
-            return row.get(key)
-    return None
-
-
-def _parse_iso_utc(text: Any) -> Optional[dt.datetime]:
-    if text is None:
-        return None
-    s = str(text).strip()
-    if not s:
-        return None
-    try:
-        t = pd.to_datetime(s, utc=True, errors="coerce")
-        if pd.isna(t):
-            return None
-        return t.to_pydatetime()
-    except Exception:
-        return None
-
-
-def _parse_sampling_dt_utc(date_val: Any, time_val: Any) -> Optional[dt.datetime]:
-    if date_val is None or time_val is None:
-        return None
-    date_s = str(date_val).strip()
-    time_s = str(time_val).strip()
-    if not date_s or not time_s:
-        return None
-    t = pd.to_datetime(f"{date_s} {time_s}", utc=True, errors="coerce")
-    if pd.isna(t):
-        return None
-    return t.to_pydatetime()
-
-
-def _extract_lat_lon(row: pd.Series) -> Tuple[Optional[float], Optional[float]]:
-    lat = _to_float(_first_existing(row, [
-        "Site GPS coordinates - latitude",
-        "GPS coordinates - latitude",
-        "Latitude",
-        "latitude",
-    ]))
-    lon = _to_float(_first_existing(row, [
-        "Site GPS coordinates - longitude",
-        "GPS coordinates - longitude",
-        "Longitude",
-        "longitude",
-    ]))
-
-    if lat is not None and lon is not None:
-        return lat, lon
-
-    # Fallback: any column containing latitude/longitude keywords.
-    lat_candidates = [c for c in row.index if "latitude" in str(c).lower()]
-    lon_candidates = [c for c in row.index if "longitude" in str(c).lower()]
-    for c in lat_candidates:
-        lat_val = _to_float(row.get(c))
-        if lat_val is not None:
-            lat = lat_val
-            break
-    for c in lon_candidates:
-        lon_val = _to_float(row.get(c))
-        if lon_val is not None:
-            lon = lon_val
-            break
-    return lat, lon
-
-
-def _avg(values: List[Optional[float]]) -> Optional[float]:
-    vals = [v for v in values if v is not None]
-    if not vals:
-        return None
-    return sum(vals) / len(vals)
-
-
-def _wind_cardinal_to_acronym(cardinal: Optional[str]) -> Optional[str]:
-    if not cardinal:
-        return None
-    c = str(cardinal).strip().upper()
-    mapping = {
-        "NORTH": "N",
-        "NORTH_NORTHEAST": "NNE",
-        "NORTHEAST": "NE",
-        "EAST_NORTHEAST": "ENE",
-        "EAST": "E",
-        "EAST_SOUTHEAST": "ESE",
-        "SOUTHEAST": "SE",
-        "SOUTH_SOUTHEAST": "SSE",
-        "SOUTH": "S",
-        "SOUTH_SOUTHWEST": "SSW",
-        "SOUTHWEST": "SW",
-        "WEST_SOUTHWEST": "WSW",
-        "WEST": "W",
-        "WEST_NORTHWEST": "WNW",
-        "NORTHWEST": "NW",
-        "NORTH_NORTHWEST": "NNW",
-        "N": "N",
-        "NNE": "NNE",
-        "NE": "NE",
-        "ENE": "ENE",
-        "E": "E",
-        "ESE": "ESE",
-        "SE": "SE",
-        "SSE": "SSE",
-        "S": "S",
-        "SSW": "SSW",
-        "SW": "SW",
-        "WSW": "WSW",
-        "W": "W",
-        "WNW": "WNW",
-        "NW": "NW",
-        "NNW": "NNW",
-    }
-    return mapping.get(c, c)
-
-
-def build_weather_rows_for_lsi1(lsi1_df: pd.DataFrame, google_api: Any) -> List[Dict[str, Any]]:
-    """
-    Build rows for the Weather sheet from new LSI 1 submissions.
-    """
-    if lsi1_df.empty:
-        return []
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    out_rows: List[Dict[str, Any]] = []
-
-    for _, row in lsi1_df.iterrows():
-        site_id = str(row.get("Site ID", "")).strip()
-        submission_ts = _parse_iso_utc(row.get("Submission date"))
-        if not site_id or submission_ts is None:
-            continue
-
-        if now_utc - submission_ts > dt.timedelta(hours=25):
-            continue
-
-        sample_start = _parse_sampling_dt_utc(row.get("Sampling date start"), row.get("Sampling time start"))
-        sample_end = _parse_sampling_dt_utc(row.get("Sampling date end"), row.get("Sampling time end"))
-        if sample_start is None or sample_end is None:
-            continue
-        if sample_end < sample_start:
-            sample_start, sample_end = sample_end, sample_start
-
-        lat, lon = _extract_lat_lon(row)
-        if lat is None or lon is None:
-            continue
-
-        payload = google_api.weather_history_hours_lookup(lat, lon)
-        history = payload.get("historyHours", [])
-        if not isinstance(history, list):
-            continue
-
-        selected = []
-        for hour in history:
-            interval = hour.get("interval", {}) if isinstance(hour, dict) else {}
-            start_ts = _parse_iso_utc(interval.get("startTime"))
-            end_ts = _parse_iso_utc(interval.get("endTime"))
-            if start_ts is None or end_ts is None:
-                continue
-            if start_ts >= sample_start and end_ts <= sample_end:
-                selected.append(hour)
-
-        if not selected:
-            continue
-
-        pressure = _avg([_to_float(h.get("airPressure", {}).get("meanSeaLevelMillibars")) for h in selected])
-        cloud = _avg([_to_float(h.get("cloudCover")) for h in selected])
-        dew = _avg([_to_float(h.get("dewPoint", {}).get("degrees")) for h in selected])
-        precip = _avg([_to_float(h.get("precipitation", {}).get("qpf", {}).get("quantity")) for h in selected])
-        humidity = _avg([_to_float(h.get("relativeHumidity")) for h in selected])
-        temperature = _avg([_to_float(h.get("temperature", {}).get("degrees")) for h in selected])
-        wind_speed = _avg([_to_float(h.get("wind", {}).get("speed", {}).get("value")) for h in selected])
-
-        wind_cardinals = [
-            str(h.get("wind", {}).get("direction", {}).get("cardinal", "")).strip()
-            for h in selected
-            if str(h.get("wind", {}).get("direction", {}).get("cardinal", "")).strip()
-        ]
-        weather_descriptions = [
-            str(h.get("weatherCondition", {}).get("description", {}).get("text", "")).strip()
-            for h in selected
-            if str(h.get("weatherCondition", {}).get("description", {}).get("text", "")).strip()
-        ]
-        wind_direction = Counter(wind_cardinals).most_common(1)[0][0] if wind_cardinals else None
-        wind_direction = _wind_cardinal_to_acronym(wind_direction)
-        weather_description = Counter(weather_descriptions).most_common(1)[0][0] if weather_descriptions else None
-
-        out_rows.append(
-            {
-                "Site ID": site_id,
-                "Submission date": row.get("Submission date"),
-                "Sampling date start": row.get("Sampling date start"),
-                "Sampling time start": row.get("Sampling time start"),
-                "Sampling date end": row.get("Sampling date end"),
-                "Sampling time end": row.get("Sampling time end"),
-                "Cloud coverage": cloud,
-                "General weather description": weather_description,
-                "Temperature (°C)": temperature,
-                "Dewpoint temperature (°C)": dew,
-                "Pressure (hPa)": pressure,
-                "Wind speed (km/h)": wind_speed,
-                "Wind direction": wind_direction,
-                "Humidity (%)": humidity,
-                "Precipitation rate (mm)": precip,
-            }
-        )
-
-    return out_rows

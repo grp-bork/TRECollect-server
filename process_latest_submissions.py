@@ -13,7 +13,7 @@ from processing.utils import get_last_data_timestamp, get_last_config_timestamp,
 from processing.xml import FormXMLParser
 from processing.process import process_site
 from curation.curate_submissions import run_curation, curate_rows_per_sheet
-from curation.output_rules import apply_output_rules, get_output_rules, build_weather_rows_for_lsi1
+from curation.output_rules import apply_output_rules, get_output_rules
 
 
 def _curated_output_filename(local_filename: str) -> str:
@@ -152,23 +152,6 @@ def main(args):
                 if lsi_target_sheet_id and owncloud_images_token:
                     print('>>> Running curation on production data...')
                     run_curation(data, logsheet_names, google_api, lsi_target_sheet_id, owncloud_images_token)
-
-            # Weather rule: for new LSI 1 data, compute weather aggregates and store in RAW backup "Weather" sheet.
-            lsi1_form_ids = [fid for fid, name in logsheet_names.items() if name == "LSI 1"]
-            lsi1_rows = []
-            for fid in lsi1_form_ids:
-                lsi1_rows.extend(data.get(fid, []))
-
-            if lsi1_rows:
-                print('>>> Computing weather aggregates for LSI 1 submissions...')
-                weather_rows = build_weather_rows_for_lsi1(
-                    pd.DataFrame(lsi1_rows),
-                    google_api
-                )
-                if weather_rows:
-                    google_api.add_rows(raw_sheet_backup_id, "Weather", weather_rows)
-                    print(f'>>> Stored {len(weather_rows)} weather row(s) into backup Weather sheet.')
-
         else:
             print('>>> No production data to curate.')
 
